@@ -1,0 +1,61 @@
+TODO:
+  - Saving the global best after a fixed period of iterations
+  - Save fitness history instead of shoving a plot and then discarding it from memory
+  - In that same file write parameters of the algorithm
+
+RGBA - default values for 4 coordinates are integers, should divide by 255 to reduce MSE 
+       as a fitness function. 0 for alpha is transparent, 1 for alpha is opaque
+
+Mode of the downloaded image is RGB, lets start with that for the beginning.
+Size of the downloaded image is 600x450.
+
+PSNR (Peak signal noise ratio for RGB) - https://www.mathworks.com/help/vision/ref/psnr.html
+
+SSIM (Structural similarity) - https://en.wikipedia.org/wiki/Structural_similarity
+(Seems to be the best metric but takes too long to compute...)
+
+PSNR seems to be the best
+
+--- BENCHMARK 1 RESULTS ---
+Uniform crossover, 2 expected mutations - 65.77 PSNR (seed = 2)
+Cut crossover, 2 epxected mutations - 65.29 PSNR (seed = 2)
+
+--- PILLOW ---
+TLDR: Switch to OpenCV2
+Opening an image with Pillow:
+from PIL import Image
+with Image.open(path) as image:
+...
+Drawing
+from PIL import ImageDraw
+draw = ImageDraw.Draw(image)
+draw.polygon([x, y, x, y, ...] or [(x, y), (x, y), ...], fill, outline, width)
+width refers to the width of the boundary, should be set to 1
+
+draw.rectangle((0, 0, WIDTH, HEIGHT), fill = (0, 0, 0)) - undo everything drawn
+
+--- OpenCV2 ---
+- Directly works with numpy arrays, much more efficient for this project.
+- Like Pillow, images are transposed, I dont know why...
+- CV2 is BGR instead of RGB???
+- Color palette extraction with kmeans?
+'''
+cv2.rectangle(img, (0, 0), (300, 300), (255, 0, 0), -1) - -1 thickness for a filled rectangle
+cv2.ellipse(img, (x, y), (ex, ey), angle, startAngle, endAngle, color, thicnkess)
+Tuples need to be integers. If working with numpy set to np.int32 data type.
+'''
+
+- Blending notes: image1 * alpha + image2 * beta + gamma, no fourth channel needed
+
+--- GA notes ---
+- It should be allowed for polygons to be resized
+- Initial color choosing: Divide the image into grids and for each grid calculate the average color
+  in that grid. Depending on in which region the triangle landed, assign the corresponding average color to it. 
+- This is combinatorial optimization.
+- Allow each gene of offsprings only to mutate with a small probability.
+- How to combine polygon configurations?
+- Simple crossover not necessarily good (bad parts can be taken)
+
+--- GENERAL STUFF ---
+- In Python, reading global variables in a scope is allowed however modyfing them is not allowed.
+  One should use the global keyword for that scenarions.

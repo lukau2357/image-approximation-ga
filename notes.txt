@@ -2,6 +2,7 @@ TODO:
   - Saving the global best after a fixed period of iterations
   - Save fitness history instead of shoving a plot and then discarding it from memory
   - In that same file write parameters of the algorithm
+  - Implement everything in c++?
 
 RGBA - default values for 4 coordinates are integers, should divide by 255 to reduce MSE 
        as a fitness function. 0 for alpha is transparent, 1 for alpha is opaque

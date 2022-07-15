@@ -7,7 +7,8 @@ import os
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import mean_squared_error as mse
 from population import Population
-from population_poly import PopulationPolyRBG
+from poly_rgb import PopulationPolyRBG
+from poly_rgb_alpha import PopulationPolyRBGAlpha
 from utils import kmeans_color_palette
 
 class GAEvolver:
@@ -102,19 +103,25 @@ class GAEvolver:
         # Selection and mating
         size = fittest_threshold
         while size < self.population.population_size:
-            parrent_indices = self.population.rand.choice(indices, size = 2, p = categorical_weights)
+            parrent_indices = self.population.rand.choice(indices, size = 2, p = categorical_weights, replace = False)
             c1, c2 = self.crossover(self.population.current_generation[parrent_indices[0]], 
                                     self.population.current_generation[parrent_indices[1]],
                                     f_values[parrent_indices[0]] / fsum,
                                     f_values[parrent_indices[1]] / fsum)
 
             self.population.current_generation[size] = c1
-            self.population.current_generation[size + 1] = c2
-            size += 2
+            size += 1
+            if size >= self.population.population_size:
+                break
+
+            self.population.current_generation[size] = c2
+            size += 1
         
         # Mutation, every gene of offsprings mutates with small probability
+        self.population.mutate_generation(fittest_threshold)
+
+        # Precomputing the corresponding images.
         for i in range(fittest_threshold, self.population.population_size):
-            self.population.mutate(self.population.current_generation[i])
             drawing = self.population.embed_chromosome(self.population.current_generation[i])
             self.population.drawings[i] = drawing
 
@@ -175,9 +182,6 @@ class GAEvolver:
             json.dump(d, f, indent = 4)
 
         self.population.export("./{}".format(self.alg_label))
-        history_path = "./{}/fitness_history.txt".format(self.alg_label)
-        with open(history_path, "a") as f:
-            f.write("{:f}\n".format(self.global_best_f))
 
         if generation_index % int(self.caching_ratio_period * self.generations) == 0 or\
            generation_index == self.generations - 1:
@@ -193,6 +197,9 @@ class GAEvolver:
 
         if data["population_label"] == "PopulationPolyRBG":
             population = PopulationPolyRBG.load(root)
+
+        elif data["population_label"] == "PopulationPolyRBGAlpha":
+            population = PopulationPolyRBGAlpha.load(root)
         
         target = cv2.imread(data["target_path"])
         res = GAEvolver(root, target, data["target_path"], data["generations"], 
@@ -207,7 +214,7 @@ class GAEvolver:
         print("Finished loading the cached GAEvolver object.\n")
         return res
 
-    def paint_canvas(self, generation_index):
+    def render(self, generation_index):
         with open("./{}/best_chromosomes_history/{:d}.npy".format(self.alg_label, generation_index), "rb") as f:
             chromosome = np.load(f)
         

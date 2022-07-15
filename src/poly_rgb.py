@@ -116,7 +116,6 @@ class PopulationPolyRBG(Population):
         """
         Uniform crossover weighted by fvalues of parrents.
         """
-
         x = args[0]
         y = args[1]
         fx = args[2]
@@ -167,6 +166,30 @@ class PopulationPolyRBG(Population):
         if mutations_rgb > 0:
             chromosome[:, self.number_of_vertices * 2:]\
             [mutation_matrix[:, self.number_of_vertices * 2:] < self.mutation_rate] = \
+            self.rand.integers(0, 256, size = (mutations_rgb), dtype = np.int32)
+
+    def mutate_generation(self, mutation_threshold):
+        mutation_tensor = self.rand.uniform(size = (self.population_size - mutation_threshold,
+                                                    self.number_of_polygons,
+                                                    self.number_of_vertices * 2 + 3))
+
+        mutations_x = np.sum(mutation_tensor[:, :, :self.number_of_vertices * 2:2] < self.mutation_rate)
+        mutations_y = np.sum(mutation_tensor[:, :, 1:self.number_of_vertices * 2:2] < self.mutation_rate)
+        mutations_rgb = np.sum(mutation_tensor[:, :, self.number_of_vertices * 2:] < self.mutation_rate)
+
+        if mutations_x > 0:
+            self.current_generation[mutation_threshold:, :, :self.number_of_vertices * 2:2]\
+                [mutation_tensor[:, :, :self.number_of_vertices * 2:2] < self.mutation_rate] = \
+                self.rand.integers(0, self.width, size = (mutations_x), dtype = np.int32)
+
+        if mutations_y > 0:
+            self.current_generation[mutation_threshold:, :, 1:self.number_of_vertices * 2:2]\
+            [mutation_tensor[:, :, 1:self.number_of_vertices * 2:2] < self.mutation_rate] = \
+            self.rand.integers(0, self.height, size = (mutations_y), dtype = np.int32)
+
+        if mutations_rgb > 0:
+            self.current_generation[mutation_threshold:, :, self.number_of_vertices * 2:]\
+            [mutation_tensor[:, :, self.number_of_vertices * 2:] < self.mutation_rate] = \
             self.rand.integers(0, 256, size = (mutations_rgb), dtype = np.int32)
 
     def export(self, root):

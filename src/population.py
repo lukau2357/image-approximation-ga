@@ -34,6 +34,10 @@ class Population(metaclass = ABCMeta):
     @abstractmethod
     def mutate(self, chromosome : np.ndarray):
         pass
+    
+    @abstractmethod
+    def mutate_generation(self, mutation_threshold):
+        pass
 
     @abstractmethod
     def export(self, path):

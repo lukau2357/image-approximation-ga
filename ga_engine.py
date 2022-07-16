@@ -16,7 +16,7 @@ class GAEvolver:
                 fittest_survival_ratio: float, population : Population, 
                 fitness_label : str, crossover_label : str, kmeans_init : bool, 
                 kmeans_clusters : int = 10, kmeans_iterations : int = 100, 
-                kmeans_repeats : int = 10, caching : bool = False, caching_ratio_period : float = 0.1):
+                kmeans_repeats : int = 10, caching : bool = False, caching_period : int = 100):
 
         self.target = target
         self.target_path = target_path
@@ -32,10 +32,7 @@ class GAEvolver:
         self.kmeans_repeats = kmeans_repeats
         self.caching = caching
         self.last_generation_index = 0
-
-        if caching_ratio_period < 0 or caching_ratio_period > 1:
-            raise Exception("Invalid value for caching ratio period given, must be in [0,1].")
-        self.caching_ratio_period = caching_ratio_period
+        self.caching_period = caching_period
 
         if fittest_survival_ratio < 0 or fittest_survival_ratio > 1:
             raise Exception("Invalid value for fittes survival ratio given, must be in [0,1].")
@@ -173,7 +170,7 @@ class GAEvolver:
                 "kmeans_iterations": self.kmeans_iterations,
                 "kmeans_repeats": self.kmeans_repeats,
                 "last_generation_index": generation_index,
-                "caching_ratio_period": self.caching_ratio_period,
+                "caching_period": self.caching_period,
                 "fittest_survival_ratio": self.fittest_survival_ratio,
                 "fitness_label": self.fitness_label,
                 "crossover_label": self.crossover_label,
@@ -183,7 +180,7 @@ class GAEvolver:
 
         self.population.export("./{}".format(self.alg_label))
 
-        if generation_index % int(self.caching_ratio_period * self.generations) == 0 or\
+        if generation_index % self.caching_period == 0 or\
            generation_index == self.generations - 1:
            with \
                 open("./{}/best_chromosomes_history/{:d}.npy".format(self.alg_label, generation_index), "wb")\
@@ -207,7 +204,7 @@ class GAEvolver:
                        data["crossover_label"], data["kmeans_init"], 
                        kmeans_clusters = data["kmeans_clusters"], kmeans_iterations = data["kmeans_iterations"],
                        kmeans_repeats = data["kmeans_repeats"], caching = True, 
-                       caching_ratio_period = data["caching_ratio_period"])
+                       caching_period = data["caching_period"])
 
         res.last_generation_index = data["last_generation_index"] + 1
 

@@ -28,17 +28,18 @@ class PopulationPolyRBGAlpha(Population):
                                   self.width, 3), dtype = np.uint8)
     
     def embed_chromosome(self, chromosome : np.ndarray):
-        canvas = np.full((self.height, self.width, 3), 255, dtype = np.uint8)
-        canvas_copy = np.full((self.height, self.width, 3), 255, dtype = np.uint8)
+        canvas = np.zeros((self.height, self.width, 3), dtype = np.uint8)
+        canvas_copy = canvas.copy()
         for i in range(self.number_of_polygons):
             vertices = chromosome[i, :2 * self.number_of_vertices].reshape(1, -1, 2).astype(np.int32)
             color = tuple(chromosome[i, 2 * self.number_of_vertices:2 * self.number_of_vertices + 3].astype(np.int32).tolist())
             alpha = chromosome[i, 2 * self.number_of_vertices + 3]
             cv2.fillPoly(canvas_copy, [vertices], color)
             cv2.addWeighted(canvas_copy, alpha, canvas, 1 - alpha, 0, canvas)
+            cv2.fillPoly(canvas_copy, [vertices], (0, 0, 0))
         return canvas
     
-    def generate_initial_population(self, color_palette: np.ndarray = None):
+    def generate_initial_population(self, target: np.ndarray = None):
         res = np.empty((self.population_size, 
                         self.number_of_polygons,
                         self.number_of_vertices * 2 + 4), dtype = np.float64)
@@ -57,12 +58,9 @@ class PopulationPolyRBGAlpha(Population):
                                                         self.number_of_vertices),
                                                 dtype = np.int32)
         
-        color_indices = self.rand.choice(color_palette.shape[0], 
-                                    size = self.population_size * self.number_of_polygons, 
-                                    replace = True)
-        res[:, :, self.number_of_vertices * 2:self.number_of_vertices * 2 + 3] = \
-            color_palette[color_indices, :].reshape(self.population_size, 
-                                                    self.number_of_polygons, 3)
+        x_means = res[:, :, :self.number_of_vertices * 2 : 2].mean(axis = 2).astype(np.int32)
+        y_means = res[:, :, 1:self.number_of_vertices * 2 : 2].mean(axis = 2).astype(np.int32)
+        res[:, :, self.number_of_vertices * 2 : self.number_of_vertices * 2 + 3] = target[y_means, x_means]
 
         res[:, :, self.number_of_vertices * 2 + 3] = self.rand.uniform(size = (self.population_size,
                                                                                self.number_of_polygons))

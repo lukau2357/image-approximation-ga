@@ -6,19 +6,17 @@ import os
 
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import mean_squared_error as mse
+from ellipse_rgb_alpha import PopulationEllipseRGBA
 from population import Population
-from poly_rgb import PopulationPolyRBG
 from poly_rgb_alpha import PopulationPolyRBGAlpha
-from utils import kmeans_color_palette
 
 class GAEvolver:
     def __init__(self, alg_label : str, target : np.ndarray, target_path : str, generations : int,
-                fittest_survival_ratio: float, population : Population, 
-                fitness_label : str, crossover_label : str, kmeans_init : bool, 
-                kmeans_clusters : int = 10, kmeans_iterations : int = 100, 
-                kmeans_repeats : int = 10, caching : bool = False, caching_period : int = 100):
+                fittest_survival_ratio: float, population : Population, fitness_label : str, 
+                crossover_label : str, caching : bool = False, caching_period : int = 100):
 
         self.target = target
+        self.target_norm = self.target.astype(np.float64) / 255
         self.target_path = target_path
         self.generations = generations
         self.population = population
@@ -26,10 +24,6 @@ class GAEvolver:
         self.global_best_f = None
         self.alg_label = alg_label
 
-        self.kmeans_init = kmeans_init
-        self.kmeans_clusters = kmeans_clusters
-        self.kmeans_iterations = kmeans_iterations
-        self.kmeans_repeats = kmeans_repeats
         self.caching = caching
         self.last_generation_index = 0
         self.caching_period = caching_period
@@ -51,15 +45,20 @@ class GAEvolver:
         else:
             self.fitness = GAEvolver.fitness_ssim
         
-        if crossover_label not in ["uniform", "cuts"]:
+        if crossover_label not in ["uniform", "cuts", "id"]:
             raise Exception("Invalid crossover label passed.")
         self.crossover_label = crossover_label
 
         if crossover_label == "uniform":
             self.crossover = self.population.crossover_uniform
         
-        else:
+        elif crossover_label == "cuts":
             self.crossover = self.population.crossover_cuts
+        
+        elif crossover_label == "id":
+            self.crossover = self.population.crossover_id
+
+        self.f_values = np.empty((self.population.population_size))
 
     @staticmethod
     def fitness_psnr(target : np.ndarray, image : np.ndarray) -> float:
@@ -74,28 +73,21 @@ class GAEvolver:
         return ssim(target, image, channel_axis = 2)
 
     def generation_change(self):
-        target_norm = self.target.astype(np.float64) / 255.0
-        f_values = np.empty(self.population.population_size, dtype = np.float64)
-
-        # Fitness calculation
-        for i in range(self.population.population_size):
-            f_values[i] = self.fitness(target_norm, 
-                                       self.population.drawings[i].astype(np.float64) / 255.0)
-
-        indices = np.argsort(-f_values)
+        indices = np.argsort(-self.f_values)
         
         # Update the best global configuration
-        if self.global_best_f is None or self.global_best_f < f_values[indices[0]]:
+        if self.global_best_f is None or self.global_best_f < self.f_values[indices[0]]:
             self.global_best = self.population.current_generation[indices[0]].copy()
-            self.global_best_f = f_values[indices[0]]
+            self.global_best_f = self.f_values[indices[0]]
 
         # Survival of the fittest
         fittest_threshold = int(self.population.population_size * self.fittest_survival_ratio)
         indices = indices[:fittest_threshold]
-        fsum = f_values[indices].sum()
-        categorical_weights = np.array([item / fsum for item in f_values[indices]], dtype = np.float64)
+        fsum = self.f_values[indices].sum()
+        categorical_weights = np.array([item / fsum for item in self.f_values[indices]], dtype = np.float64)
         self.population.current_generation[:fittest_threshold] = self.population.current_generation[indices]
         self.population.drawings[:fittest_threshold] = self.population.drawings[indices]
+        self.f_values[:fittest_threshold] = self.f_values[indices]
 
         # Selection and mating
         size = fittest_threshold
@@ -103,8 +95,8 @@ class GAEvolver:
             parrent_indices = self.population.rand.choice(indices, size = 2, p = categorical_weights, replace = False)
             c1, c2 = self.crossover(self.population.current_generation[parrent_indices[0]], 
                                     self.population.current_generation[parrent_indices[1]],
-                                    f_values[parrent_indices[0]] / fsum,
-                                    f_values[parrent_indices[1]] / fsum)
+                                    self.f_values[parrent_indices[0]] / fsum,
+                                    self.f_values[parrent_indices[1]] / fsum)
 
             self.population.current_generation[size] = c1
             size += 1
@@ -113,7 +105,7 @@ class GAEvolver:
 
             self.population.current_generation[size] = c2
             size += 1
-        
+
         # Mutation, every gene of offsprings mutates with small probability
         self.population.mutate_generation(fittest_threshold)
 
@@ -121,22 +113,14 @@ class GAEvolver:
         for i in range(fittest_threshold, self.population.population_size):
             drawing = self.population.embed_chromosome(self.population.current_generation[i])
             self.population.drawings[i] = drawing
+            self.f_values[i] = self.fitness(self.target_norm, drawing.astype(np.float64) / 255)
 
     def evolution(self):
         if self.last_generation_index == 0:
-            if self.kmeans_init:
-                kmeans_start = time.time()
-                print("Started K-means color extraction from the target image. Computing {:d} clusters.\n".format(self.kmeans_clusters))
-                color_palette = kmeans_color_palette(self.target, self.kmeans_clusters, 
-                                                     self.kmeans_iterations, self.kmeans_repeats)
-                kmeans_end = time.time()
-
-            else:
-                color_palette = None
-            
-            print("K-means finished in {:.2f} seconds.".format(kmeans_end - kmeans_start))
-            self.population.generate_initial_population(color_palette)
+            self.population.generate_initial_population(self.target)
             print("Finished generating initial population.\n")
+            for i in range(self.population.population_size):
+                self.f_values[i] = self.fitness(self.target_norm, self.population.drawings[i].astype(np.float64) / 255)
 
         else:
             print("Continuing evolution from cached data.")
@@ -150,7 +134,9 @@ class GAEvolver:
             print("Best global fitness: {:.5f}".format(self.global_best_f))
             print("Time taken: {:.2f}\n".format(e - s))
 
-            self.export(i)
+            if self.caching:
+                self.export(i)
+
             self.last_generation_index = i
         
         print("Evolution finished!\n")
@@ -165,11 +151,8 @@ class GAEvolver:
             d = {
                 "target_path": self.target_path,
                 "generations": self.generations,
-                "kmeans_init": self.kmeans_init,
-                "kmeans_clusters": self.kmeans_clusters,
-                "kmeans_iterations": self.kmeans_iterations,
-                "kmeans_repeats": self.kmeans_repeats,
                 "last_generation_index": generation_index,
+                "caching": self.caching,
                 "caching_period": self.caching_period,
                 "fittest_survival_ratio": self.fittest_survival_ratio,
                 "fitness_label": self.fitness_label,
@@ -179,6 +162,9 @@ class GAEvolver:
             json.dump(d, f, indent = 4)
 
         self.population.export("./{}".format(self.alg_label))
+
+        with open("./{}/f_values.npy".format(self.alg_label), "wb") as f:
+            np.save(f, self.f_values)
 
         if generation_index % self.caching_period == 0 or\
            generation_index == self.generations - 1:
@@ -192,29 +178,30 @@ class GAEvolver:
         with open("./{}/evolver_metadata.json".format(root), "r") as f:
             data = json.load(f)
 
-        if data["population_label"] == "PopulationPolyRBG":
-            population = PopulationPolyRBG.load(root)
-
-        elif data["population_label"] == "PopulationPolyRBGAlpha":
+        if data["population_label"] == "PopulationPolyRBGAlpha":
             population = PopulationPolyRBGAlpha.load(root)
+
+        elif data["population_label"] == "PopulationEllipseRGBA":
+            population = PopulationEllipseRGBA.load(root)
         
         target = cv2.imread(data["target_path"])
         res = GAEvolver(root, target, data["target_path"], data["generations"], 
                        data["fittest_survival_ratio"], population, data["fitness_label"], 
-                       data["crossover_label"], data["kmeans_init"], 
-                       kmeans_clusters = data["kmeans_clusters"], kmeans_iterations = data["kmeans_iterations"],
-                       kmeans_repeats = data["kmeans_repeats"], caching = True, 
-                       caching_period = data["caching_period"])
+                       data["crossover_label"], caching = True, caching_period = data["caching_period"])
 
         res.last_generation_index = data["last_generation_index"] + 1
+        print("Finished loading the cached GAEvolver object.")
 
-        print("Finished loading the cached GAEvolver object.\n")
+        with open("./{}/f_values.npy".format(root), "rb") as f:
+            res.f_values = np.load(f)
+
+        print("Finished loading the cached f-values.\n")
         return res
 
     def render(self, generation_index):
         with open("./{}/best_chromosomes_history/{:d}.npy".format(self.alg_label, generation_index), "rb") as f:
             chromosome = np.load(f)
         
-        canvas = self.population.embed_chromosome(chromosome)
+        canvas = self.population.embed_chromosome(chromosome).astype(np.uint8)
         cv2.imshow("./{}-{:d}".format(self.alg_label, generation_index), canvas)
         cv2.waitKey(0)

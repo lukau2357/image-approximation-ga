@@ -16,7 +16,7 @@ class Population(metaclass = ABCMeta):
         self.drawings = None
         
     @abstractmethod
-    def generate_initial_population(self, color_palette : np.ndarray = None):
+    def generate_initial_population(self, target : np.ndarray = None):
         pass
     
     @abstractmethod
@@ -30,6 +30,10 @@ class Population(metaclass = ABCMeta):
     @abstractmethod
     def crossover_uniform(self, *args):
         pass
+
+    # Identity crossover
+    def crossover_id(self, *args):
+        return args[0].copy(), args[1].copy()
 
     @abstractmethod
     def mutate(self, chromosome : np.ndarray):

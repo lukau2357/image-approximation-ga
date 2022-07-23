@@ -6,9 +6,13 @@ from sklearn.cluster import DBSCAN
 
 def kmeans_color_palette(image : np.ndarray, clusters : int, iterations : int,\
                          repeats : int):
+    '''
+    Performs the K-means clustering algorithm on the given image and returns the color 
+    palette for the input image.
+    '''
     input = image.reshape((-1, 3)).astype(np.float32)
     criteria = (cv2.TERM_CRITERIA_MAX_ITER, iterations, -1)
-    _, labels, centers = cv2.kmeans(input, clusters, None, criteria, repeats, cv2.KMEANS_RANDOM_CENTERS)
+    _, __, centers = cv2.kmeans(input, clusters, None, criteria, repeats, cv2.KMEANS_RANDOM_CENTERS)
     centers = centers.astype(np.int32)
     return centers
 
@@ -31,12 +35,8 @@ def dbscan_color_palette(image : np.ndarray,
     dbscan_input[:, 2] = image[:, :, 2].flatten().copy()
 
     dbscan = DBSCAN(eps = eps, min_samples = min_samples, metric = metric)
-    start = time.time()
     labels = dbscan.fit_predict(dbscan_input)
-    end = time.time()
-    print("DBSCAN clustering finished in {:f} seconds.".format(end - start))
-
-    print(np.unique(labels))
+    return labels
 
 def rand_color_palette(rand : np.random.Generator, num_colors : int):
     return rand.integers(0, 256, size = (num_colors, 3))
